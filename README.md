@@ -1,4 +1,4 @@
-# Vue Spreadsheet
+# Vue Excel
 
 A feature-rich, Excel-like spreadsheet application built with Vue 3, TypeScript, and TailwindCSS. Supports importing/exporting `.xlsx` files, cell formatting, shapes, formulas, and a multi-mode workflow (Designer, Operator, Manual).
 
