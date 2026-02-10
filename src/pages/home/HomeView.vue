@@ -71,7 +71,7 @@ const processFile = async (file: File) => {
 
         <!-- Title -->
         <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-3 tracking-tight">
-          Vue Spreadsheet
+          Vue Excel
         </h1>
         <p class="text-lg text-gray-500 dark:text-gray-400 mb-10 leading-relaxed">
           The secure, intelligent way to manage <br />
@@ -135,7 +135,7 @@ const processFile = async (file: File) => {
 
       <!-- Footer / Credits -->
       <p class="mt-8 text-sm text-gray-400 dark:text-gray-600">
-        &copy; {{ new Date().getFullYear() }} Vue Spreadsheet. All rights reserved.
+        &copy; {{ new Date().getFullYear() }} Vue Excel. All rights reserved.
       </p>
     </div>
   </main>
