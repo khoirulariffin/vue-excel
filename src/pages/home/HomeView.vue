@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { FileSpreadsheet, Upload, Loader2 } from 'lucide-vue-next'
 import { useSpreadsheetStore } from '@/features/spreadsheet/model/spreadsheetStore'
-import ThemeToggle from '@/features/theme/ui/ThemeToggle.vue'
 
 const router = useRouter()
 const store = useSpreadsheetStore()
@@ -52,11 +51,6 @@ const processFile = async (file: File) => {
 
 <template>
   <main class="flex-1 flex flex-col items-center justify-center p-6 relative">
-    <!-- Theme Toggle (Top Right) -->
-    <div class="absolute top-6 right-6">
-      <ThemeToggle />
-    </div>
-
     <div class="text-center max-w-lg w-full">
       <!-- Card Container with Apple-style Glassmorphism -->
       <div
