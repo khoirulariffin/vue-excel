@@ -12,6 +12,7 @@ import {
   ArrowUpToLine,
   ArrowDownToLine,
   Crop,
+  Download,
 } from 'lucide-vue-next'
 
 interface Props {
@@ -49,6 +50,11 @@ const rotateCenterY = ref(0)
 // --- Crop state ---
 const isCropping = ref(false)
 const cropRect = ref({ x: 0, y: 0, w: 0, h: 0 })
+const isCropDragging = ref(false)
+const cropDragHandle = ref('')
+const cropDragStartX = ref(0)
+const cropDragStartY = ref(0)
+const cropDragStartRect = ref({ x: 0, y: 0, w: 0, h: 0 })
 
 const isSelected = (id: string) => store.selectedShapeId === id
 
@@ -144,28 +150,187 @@ const startCrop = () => {
   const shape = selectedShapeObj.value
   if (!shape || shape.type !== 'image') return
   isCropping.value = true
-  cropRect.value = { x: 0, y: 0, w: shape.w, h: shape.h }
+  // Start with 80% crop area centered
+  const margin = 0.1
+  cropRect.value = {
+    x: shape.w * margin,
+    y: shape.h * margin,
+    w: shape.w * (1 - margin * 2),
+    h: shape.h * (1 - margin * 2),
+  }
 }
 
 const applyCrop = () => {
   const shape = selectedShapeObj.value
-  if (!shape) return
+  if (!shape || !shape.src) return
   store.pushUndo()
-  store.updateShape(shape.id, {
-    x: shape.x + cropRect.value.x,
-    y: shape.y + cropRect.value.y,
-    w: cropRect.value.w,
-    h: cropRect.value.h,
-  })
-  isCropping.value = false
+
+  // Crop the actual image using canvas
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  img.onload = () => {
+    const scaleX = img.naturalWidth / shape.w
+    const scaleY = img.naturalHeight / shape.h
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')!
+    canvas.width = cropRect.value.w * scaleX
+    canvas.height = cropRect.value.h * scaleY
+    ctx.drawImage(
+      img,
+      cropRect.value.x * scaleX,
+      cropRect.value.y * scaleY,
+      canvas.width,
+      canvas.height,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    )
+    const croppedSrc = canvas.toDataURL('image/png')
+    store.updateShape(shape.id, {
+      src: croppedSrc,
+      x: shape.x + cropRect.value.x,
+      y: shape.y + cropRect.value.y,
+      w: cropRect.value.w,
+      h: cropRect.value.h,
+    })
+    isCropping.value = false
+  }
+  img.src = shape.src
 }
 
 const cancelCrop = () => {
   isCropping.value = false
 }
 
+const handleCropMouseDown = (e: MouseEvent, handle: string) => {
+  e.stopPropagation()
+  e.preventDefault()
+  isCropDragging.value = true
+  cropDragHandle.value = handle
+  cropDragStartX.value = e.clientX
+  cropDragStartY.value = e.clientY
+  cropDragStartRect.value = { ...cropRect.value }
+}
+
+const handleCropMouseMove = (e: MouseEvent) => {
+  if (!isCropDragging.value) return
+  const shape = selectedShapeObj.value
+  if (!shape) return
+
+  const dx = e.clientX - cropDragStartX.value
+  const dy = e.clientY - cropDragStartY.value
+  const s = cropDragStartRect.value
+  const h = cropDragHandle.value
+  const minSize = 20
+
+  let { x, y, w, h: ch } = { x: s.x, y: s.y, w: s.w, h: s.h }
+
+  if (h === 'move') {
+    x = Math.max(0, Math.min(shape.w - w, s.x + dx))
+    y = Math.max(0, Math.min(shape.h - ch, s.y + dy))
+  } else {
+    if (h.includes('e')) w = Math.max(minSize, Math.min(shape.w - x, s.w + dx))
+    if (h.includes('w')) {
+      const newW = Math.max(minSize, s.w - dx)
+      const newX = s.x + (s.w - newW)
+      if (newX >= 0) {
+        x = newX
+        w = newW
+      }
+    }
+    if (h.includes('s')) ch = Math.max(minSize, Math.min(shape.h - y, s.h + dy))
+    if (h.includes('n')) {
+      const newH = Math.max(minSize, s.h - dy)
+      const newY = s.y + (s.h - newH)
+      if (newY >= 0) {
+        y = newY
+        ch = newH
+      }
+    }
+  }
+
+  cropRect.value = { x, y, w, h: ch }
+}
+
+const handleCropMouseUp = () => {
+  isCropDragging.value = false
+  cropDragHandle.value = ''
+}
+
+// --- Export/Download Object ---
+const exportObject = () => {
+  const shape = selectedShapeObj.value
+  if (!shape) return
+
+  if (shape.type === 'image' && shape.src) {
+    // Download image directly
+    const link = document.createElement('a')
+    link.download = `image-${Date.now()}.png`
+    link.href = shape.src
+    link.click()
+  } else if (shape.type === 'form') {
+    // Render SVG shape to canvas and download
+    const canvas = document.createElement('canvas')
+    const scale = 2
+    canvas.width = shape.w * scale
+    canvas.height = shape.h * scale
+    const ctx = canvas.getContext('2d')!
+    ctx.scale(scale, scale)
+
+    // Draw shape
+    ctx.fillStyle = shape.fill || 'transparent'
+    ctx.strokeStyle = shape.stroke || 'transparent'
+    ctx.lineWidth = shape.strokeWidth || 1
+
+    if (shape.shapeType === 'ellipse') {
+      ctx.beginPath()
+      ctx.ellipse(shape.w / 2, shape.h / 2, shape.w / 2, shape.h / 2, 0, 0, Math.PI * 2)
+      if (shape.fill && shape.fill !== 'transparent') ctx.fill()
+      if (shape.stroke && shape.stroke !== 'transparent') ctx.stroke()
+    } else if (shape.shapeType === 'triangle') {
+      ctx.beginPath()
+      ctx.moveTo(shape.w / 2, 0)
+      ctx.lineTo(shape.w, shape.h)
+      ctx.lineTo(0, shape.h)
+      ctx.closePath()
+      if (shape.fill && shape.fill !== 'transparent') ctx.fill()
+      if (shape.stroke && shape.stroke !== 'transparent') ctx.stroke()
+    } else if (shape.shapeType === 'roundRect') {
+      const r = 10
+      ctx.beginPath()
+      ctx.roundRect(0, 0, shape.w, shape.h, r)
+      if (shape.fill && shape.fill !== 'transparent') ctx.fill()
+      if (shape.stroke && shape.stroke !== 'transparent') ctx.stroke()
+    } else {
+      if (shape.fill && shape.fill !== 'transparent') ctx.fillRect(0, 0, shape.w, shape.h)
+      if (shape.stroke && shape.stroke !== 'transparent') ctx.strokeRect(0, 0, shape.w, shape.h)
+    }
+
+    // Draw text
+    if (shape.text) {
+      ctx.fillStyle = shape.textColor || '#000000'
+      ctx.font = `${shape.textBold ? 'bold ' : ''}${shape.textSize || 11}pt sans-serif`
+      ctx.textAlign = (shape.textAlign as CanvasTextAlign) || 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(shape.text, shape.w / 2, shape.h / 2)
+    }
+
+    const link = document.createElement('a')
+    link.download = `${shape.shapeType || 'shape'}-${Date.now()}.png`
+    link.href = canvas.toDataURL('image/png')
+    link.click()
+  }
+}
+
 // --- Global mouse move/up ---
 const handleMouseMove = (e: MouseEvent) => {
+  // Handle crop drag first
+  if (isCropDragging.value) {
+    handleCropMouseMove(e)
+    return
+  }
+
   const shape = selectedShapeObj.value
   if (!shape) return
 
@@ -212,6 +377,7 @@ const handleMouseUp = () => {
   isDragging.value = false
   isResizing.value = false
   isRotating.value = false
+  handleCropMouseUp()
 }
 
 const handleBackgroundClick = () => {
@@ -446,15 +612,108 @@ const getHandleStyle = (handle: string, shape: ExcelShape) => {
 
       <!-- CROP OVERLAY -->
       <template v-if="isSelected(shape.id) && isCropping && shape.type === 'image'">
-        <div class="absolute inset-0 bg-black/40 pointer-events-none"></div>
+        <!-- Dark overlay outside crop area (4 rects) -->
         <div
-          class="absolute border-2 border-white border-dashed"
+          class="absolute bg-black/50 pointer-events-none"
+          :style="{ left: 0, top: 0, width: `${cropRect.x}px`, height: `${shape.h}px` }"
+        ></div>
+        <div
+          class="absolute bg-black/50 pointer-events-none"
+          :style="{
+            left: `${cropRect.x + cropRect.w}px`,
+            top: 0,
+            width: `${shape.w - cropRect.x - cropRect.w}px`,
+            height: `${shape.h}px`,
+          }"
+        ></div>
+        <div
+          class="absolute bg-black/50 pointer-events-none"
+          :style="{
+            left: `${cropRect.x}px`,
+            top: 0,
+            width: `${cropRect.w}px`,
+            height: `${cropRect.y}px`,
+          }"
+        ></div>
+        <div
+          class="absolute bg-black/50 pointer-events-none"
+          :style="{
+            left: `${cropRect.x}px`,
+            top: `${cropRect.y + cropRect.h}px`,
+            width: `${cropRect.w}px`,
+            height: `${shape.h - cropRect.y - cropRect.h}px`,
+          }"
+        ></div>
+
+        <!-- Crop rect border (draggable to move) -->
+        <div
+          class="absolute border-2 border-white cursor-move"
           :style="{
             left: `${cropRect.x}px`,
             top: `${cropRect.y}px`,
             width: `${cropRect.w}px`,
             height: `${cropRect.h}px`,
           }"
+          @mousedown="handleCropMouseDown($event, 'move')"
+        >
+          <!-- Rule of thirds grid lines -->
+          <div class="absolute inset-0 pointer-events-none">
+            <div class="absolute left-1/3 top-0 w-px h-full bg-white/30"></div>
+            <div class="absolute left-2/3 top-0 w-px h-full bg-white/30"></div>
+            <div class="absolute top-1/3 left-0 h-px w-full bg-white/30"></div>
+            <div class="absolute top-2/3 left-0 h-px w-full bg-white/30"></div>
+          </div>
+        </div>
+
+        <!-- Crop resize handles -->
+        <div
+          class="absolute w-3 h-3 bg-white rounded-full border border-gray-400 cursor-nw-resize z-10"
+          :style="{ left: `${cropRect.x - 6}px`, top: `${cropRect.y - 6}px` }"
+          @mousedown="handleCropMouseDown($event, 'nw')"
+        ></div>
+        <div
+          class="absolute w-3 h-3 bg-white rounded-full border border-gray-400 cursor-n-resize z-10"
+          :style="{ left: `${cropRect.x + cropRect.w / 2 - 6}px`, top: `${cropRect.y - 6}px` }"
+          @mousedown="handleCropMouseDown($event, 'n')"
+        ></div>
+        <div
+          class="absolute w-3 h-3 bg-white rounded-full border border-gray-400 cursor-ne-resize z-10"
+          :style="{ left: `${cropRect.x + cropRect.w - 6}px`, top: `${cropRect.y - 6}px` }"
+          @mousedown="handleCropMouseDown($event, 'ne')"
+        ></div>
+        <div
+          class="absolute w-3 h-3 bg-white rounded-full border border-gray-400 cursor-e-resize z-10"
+          :style="{
+            left: `${cropRect.x + cropRect.w - 6}px`,
+            top: `${cropRect.y + cropRect.h / 2 - 6}px`,
+          }"
+          @mousedown="handleCropMouseDown($event, 'e')"
+        ></div>
+        <div
+          class="absolute w-3 h-3 bg-white rounded-full border border-gray-400 cursor-se-resize z-10"
+          :style="{
+            left: `${cropRect.x + cropRect.w - 6}px`,
+            top: `${cropRect.y + cropRect.h - 6}px`,
+          }"
+          @mousedown="handleCropMouseDown($event, 'se')"
+        ></div>
+        <div
+          class="absolute w-3 h-3 bg-white rounded-full border border-gray-400 cursor-s-resize z-10"
+          :style="{
+            left: `${cropRect.x + cropRect.w / 2 - 6}px`,
+            top: `${cropRect.y + cropRect.h - 6}px`,
+          }"
+          @mousedown="handleCropMouseDown($event, 's')"
+        ></div>
+        <div
+          class="absolute w-3 h-3 bg-white rounded-full border border-gray-400 cursor-sw-resize z-10"
+          :style="{ left: `${cropRect.x - 6}px`, top: `${cropRect.y + cropRect.h - 6}px` }"
+          @mousedown="handleCropMouseDown($event, 'sw')"
+        ></div>
+        <div
+          class="absolute w-3 h-3 bg-white rounded-full border border-gray-400 cursor-w-resize z-10"
+          :style="{ left: `${cropRect.x - 6}px`, top: `${cropRect.y + cropRect.h / 2 - 6}px` }"
+          @mousedown="handleCropMouseDown($event, 'w')"
         ></div>
       </template>
     </div>
@@ -560,6 +819,15 @@ const getHandleStyle = (handle: string, shape: ExcelShape) => {
         @click="store.duplicateShape(selectedShapeObj.id)"
       >
         <Copy :size="14" />
+      </button>
+
+      <!-- Download -->
+      <button
+        class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
+        title="Download"
+        @click="exportObject"
+      >
+        <Download :size="14" />
       </button>
 
       <!-- Delete -->
