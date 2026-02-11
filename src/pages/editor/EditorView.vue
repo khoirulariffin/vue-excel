@@ -58,6 +58,18 @@ const handleAddSheet = () => {
 }
 
 const handleKeydown = (e: KeyboardEvent) => {
+  // Escape: cancel edit or unselect cell (works in all modes)
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    if (store.editingCell) {
+      store.cancelEdit()
+    } else if (store.selectedCell) {
+      store.selectedCell = null
+      store.selectionRange = null
+    }
+    return
+  }
+
   if (store.appMode !== 'manual') return
   const mod = e.ctrlKey || e.metaKey
 
