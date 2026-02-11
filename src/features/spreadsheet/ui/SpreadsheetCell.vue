@@ -221,12 +221,20 @@ watch(
     if (ec && ec.row === props.rowIndex && ec.col === props.colIndex) {
       const val = liveCell.value.value
       editValue.value = val !== null && val !== undefined ? String(val) : ''
+      store.pendingEditValue = editValue.value
       nextTick(() => {
         cellInputRef.value?.focus()
       })
     }
   },
 )
+
+// Sync editValue to store.pendingEditValue as user types
+watch(editValue, (val) => {
+  if (isEditing.value) {
+    store.pendingEditValue = val
+  }
+})
 </script>
 
 <template>

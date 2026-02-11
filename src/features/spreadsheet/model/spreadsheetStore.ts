@@ -42,6 +42,7 @@ export const useSpreadsheetStore = defineStore('spreadsheet', () => {
   const zoom = ref(1.0)
   const selectedCell = ref<SelectedCell | null>(null)
   const selectionRange = ref<SelectionRange | null>(null)
+  const pendingEditValue = ref<string | null>(null)
   const editingCell = ref<SelectedCell | null>(null)
   const formulaBarFocused = ref(false)
 
@@ -127,7 +128,9 @@ export const useSpreadsheetStore = defineStore('spreadsheet', () => {
 
   const selectCell = (row: number, col: number) => {
     // Commit any pending edit before selecting new cell
-    if (editingCell.value) {
+    if (editingCell.value && pendingEditValue.value !== null) {
+      commitEdit(pendingEditValue.value)
+    } else if (editingCell.value) {
       editingCell.value = null
     }
     selectedCell.value = { row, col }
@@ -293,10 +296,12 @@ export const useSpreadsheetStore = defineStore('spreadsheet', () => {
     const numVal = Number(value)
     updateCellValue(row, col, value === '' ? null : isNaN(numVal) ? value : numVal)
     editingCell.value = null
+    pendingEditValue.value = null
   }
 
   const cancelEdit = () => {
     editingCell.value = null
+    pendingEditValue.value = null
   }
 
   const clearSelection = () => {
@@ -564,6 +569,7 @@ export const useSpreadsheetStore = defineStore('spreadsheet', () => {
     selectedCellData,
     selectedCellValue,
     editingCell,
+    pendingEditValue,
     formulaBarFocused,
     importExcel,
     exportExcel,
