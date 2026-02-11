@@ -57,7 +57,8 @@ const allowedRoles = ref<UserRole[]>([])
 
 const inputTypes: { id: InputType; icon: typeof Type; label: string }[] = [
   { id: 'text', icon: Type, label: 'Text' },
-  { id: 'number', icon: Hash, label: 'Number' },
+  { id: 'number', icon: Hash, label: 'Integer' },
+  { id: 'float', icon: Hash, label: 'Float' },
   { id: 'select', icon: List, label: 'Select' },
   { id: 'boolean', icon: ToggleLeft, label: 'Toggle' },
   { id: 'date', icon: Calendar, label: 'Date' },
@@ -319,7 +320,14 @@ const toggleRole = (role: UserRole) => {
               </div>
 
               <!-- Placeholder -->
-              <div v-if="inputType === 'text' || inputType === 'number'">
+              <div
+                v-if="
+                  inputType === 'text' ||
+                  inputType === 'number' ||
+                  inputType === 'float' ||
+                  inputType === 'image'
+                "
+              >
                 <label
                   class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
                 >
@@ -361,7 +369,10 @@ const toggleRole = (role: UserRole) => {
 
             <!-- VALIDATION TAB -->
             <template v-if="activeTab === 'validation'">
-              <div v-if="inputType === 'number'" class="grid grid-cols-2 gap-3">
+              <div
+                v-if="inputType === 'number' || inputType === 'float'"
+                class="grid grid-cols-2 gap-3"
+              >
                 <div>
                   <label
                     class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
@@ -417,7 +428,7 @@ const toggleRole = (role: UserRole) => {
               </div>
 
               <div
-                v-if="inputType !== 'number' && !pattern && !errorMsg"
+                v-if="inputType !== 'number' && inputType !== 'float' && !pattern && !errorMsg"
                 class="text-center py-8 text-gray-300 dark:text-gray-600"
               >
                 <AlertCircle :size="32" class="mx-auto mb-2 opacity-50" />

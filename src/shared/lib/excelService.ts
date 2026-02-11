@@ -247,14 +247,17 @@ const findMedia = (workbook: any, imageId: string) => {
 const parseSpecialSyntax = (
   text: string,
 ): { value: string | null; config: InputConfig | undefined } => {
+  // Normalize multiline (merged cells may have newlines)
+  const normalized = text.trim().replace(/\r?\n/g, ' ')
+  // Greedy match for value part, then optional # placeholder
   const regex = /^\{(\w+)\s+([a-zA-Z0-9_]+)\s*(?:=\s*(.*?))?\s*(?:#\s*(.*))?\}$/
-  const match = text.trim().match(regex)
+  const match = normalized.match(regex)
   if (!match) return { value: text, config: undefined }
 
   const typeCode = match[1]!.toLowerCase()
   const label = match[2]
-  const defaultValueRaw = match[3] || ''
-  const placeholder = match[4] || ''
+  const defaultValueRaw = (match[3] || '').trim()
+  const placeholder = (match[4] || '').trim()
 
   let type: InputType = 'text'
   let options: string[] = []
@@ -266,8 +269,11 @@ const parseSpecialSyntax = (
       displayValue = defaultValueRaw
       break
     case 'int':
-    case 'float':
       type = 'number'
+      displayValue = defaultValueRaw
+      break
+    case 'float':
+      type = 'float'
       displayValue = defaultValueRaw
       break
     case 'bool':
@@ -1269,12 +1275,12 @@ export const exportToExcelBlob = async (sheets: SheetData[]): Promise<Blob> => {
                 error:
                   config.validation?.message || `Please select from: ${config.options.join(', ')}`,
               }
-            } else if (config.type === 'number') {
+            } else if (config.type === 'number' || config.type === 'float') {
               const hasMin = config.validation?.min !== undefined
               const hasMax = config.validation?.max !== undefined
               if (hasMin || hasMax) {
                 cell.dataValidation = {
-                  type: 'whole',
+                  type: config.type === 'float' ? 'decimal' : 'whole',
                   operator:
                     hasMin && hasMax
                       ? 'between'

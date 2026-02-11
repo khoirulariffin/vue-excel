@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, nextTick, watch } from 'vue'
+import { ImagePlus } from 'lucide-vue-next'
 import type { CellData, InputConfig } from '@/shared/types'
 import type { MergeInfo } from '@/features/spreadsheet/lib/useMergeMap'
 import { buildCellCssStyle, buildCellContentStyle } from '@/features/spreadsheet/lib/useCellStyle'
@@ -173,11 +174,24 @@ const commitOperatorValue = (val: string) => {
   const config = liveCell.value.inputConfig
   if (!config) return
   let finalVal: string | number | null = val
-  if (config.type === 'number' && val !== '') {
+  if ((config.type === 'number' || config.type === 'float') && val !== '') {
     finalVal = Number(val)
   }
   if (val === '') finalVal = null
   store.updateCellValue(props.rowIndex, props.colIndex, finalVal)
+}
+
+const handleImageUpload = (e: Event) => {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = () => {
+    const dataUrl = reader.result as string
+    store.updateCellValue(props.rowIndex, props.colIndex, dataUrl)
+  }
+  reader.readAsDataURL(file)
+  input.value = ''
 }
 
 const handleOperatorInput = (e: Event) => {
@@ -284,11 +298,26 @@ watch(editValue, (val) => {
         @input="handleOperatorInput"
       />
 
-      <!-- Number Input -->
+      <!-- Number Input (int) -->
       <input
         v-else-if="liveCell.inputConfig?.type === 'number'"
         :value="operatorValue"
         type="number"
+        step="1"
+        class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 text-[11pt] px-1 outline-none border-none m-0"
+        :style="{ color: operatorTextColor }"
+        :placeholder="liveCell.inputConfig?.placeholder || ''"
+        :min="liveCell.inputConfig?.validation?.min"
+        :max="liveCell.inputConfig?.validation?.max"
+        @input="handleOperatorInput"
+      />
+
+      <!-- Float Input -->
+      <input
+        v-else-if="liveCell.inputConfig?.type === 'float'"
+        :value="operatorValue"
+        type="number"
+        step="any"
         class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 text-[11pt] px-1 outline-none border-none m-0"
         :style="{ color: operatorTextColor }"
         :placeholder="liveCell.inputConfig?.placeholder || ''"
@@ -331,6 +360,38 @@ watch(editValue, (val) => {
             :class="operatorValue === 'true' ? 'left-[16px]' : 'left-[2px]'"
           ></div>
         </div>
+      </div>
+
+      <!-- Image Upload -->
+      <div
+        v-else-if="liveCell.inputConfig?.type === 'image'"
+        class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 flex items-center justify-center overflow-hidden relative group cursor-pointer"
+        @click.stop="($refs.imageInput as HTMLInputElement)?.click()"
+      >
+        <img
+          v-if="operatorValue && operatorValue.startsWith('data:image')"
+          :src="operatorValue"
+          alt="uploaded"
+          class="h-full w-auto object-contain"
+        />
+        <div v-else class="flex flex-col items-center gap-0.5 text-gray-400 dark:text-gray-500">
+          <ImagePlus :size="18" />
+          <span class="text-[8pt]">{{ liveCell.inputConfig?.placeholder || 'Upload' }}</span>
+        </div>
+        <!-- Hover overlay to re-upload -->
+        <div
+          v-if="operatorValue && operatorValue.startsWith('data:image')"
+          class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <ImagePlus :size="16" class="text-white" />
+        </div>
+        <input
+          ref="imageInput"
+          type="file"
+          accept="image/*"
+          class="hidden"
+          @change="handleImageUpload"
+        />
       </div>
 
       <!-- Date Input -->

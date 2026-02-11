@@ -15,7 +15,15 @@ export interface User {
   avatar: string
 }
 
-export type InputType = 'text' | 'number' | 'select' | 'boolean' | 'image' | 'date' | 'symbol'
+export type InputType =
+  | 'text'
+  | 'number'
+  | 'float'
+  | 'select'
+  | 'boolean'
+  | 'image'
+  | 'date'
+  | 'symbol'
 
 export interface ValidationRule {
   min?: number
