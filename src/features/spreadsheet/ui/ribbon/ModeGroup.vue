@@ -4,6 +4,7 @@ import { PenTool, Eye, Grid3x3, Shield } from 'lucide-vue-next'
 import { useSpreadsheetStore } from '@/features/spreadsheet/model/spreadsheetStore'
 import type { AppMode } from '@/shared/types'
 import { UserRole } from '@/shared/types'
+// import { dummyExcelLoadResponse } from '@/shared/lib/apiContract'
 
 const store = useSpreadsheetStore()
 
@@ -16,6 +17,14 @@ const roleOptions: { value: UserRole; label: string }[] = [
 
 const handleSwitchMode = (mode: AppMode) => {
   store.appMode = mode
+
+  // Temporary: load dummy data when switching to Operator mode
+  // if (mode === 'operator') {
+  //   const { sheets, fileName } = dummyExcelLoadResponse.data
+  //   store.sheets = sheets
+  //   store.fileName = fileName
+  //   console.log('Loaded dummy data for Operator mode:', dummyExcelLoadResponse.data)
+  // }
 }
 
 const modes: { key: AppMode; label: string; icon: Component; color: string; bg: string }[] = [

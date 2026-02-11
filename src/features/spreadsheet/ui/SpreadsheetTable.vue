@@ -172,7 +172,7 @@ const handleRowResizeEnd = () => {
             </colgroup>
 
             <!-- HEADER -->
-            <thead>
+            <thead class="z-9999 relative">
               <tr>
                 <th
                   class="sticky top-0 left-0 z-30 bg-gray-200 dark:bg-gray-700 border-r border-b border-gray-300 dark:border-gray-600 h-8 w-10 transition-colors"

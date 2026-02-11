@@ -1228,10 +1228,97 @@ export const exportToExcelBlob = async (sheets: SheetData[]): Promise<Blob> => {
                 cellData.value === null ||
                 cellData.value === undefined
               ) {
-                cell.value = null
+                // Write placeholder as cell value if inputConfig exists and cell is empty
+                if (cellData.inputConfig?.placeholder) {
+                  cell.value = cellData.inputConfig.placeholder
+                  cell.font = {
+                    ...cell.font,
+                    name: 'Calibri',
+                    size: 11,
+                    color: { argb: 'FF9CA3AF' }, // gray-400
+                    italic: true,
+                  }
+                } else if (cellData.inputConfig?.label) {
+                  cell.value = `[${cellData.inputConfig.label}]`
+                  cell.font = {
+                    ...cell.font,
+                    name: 'Calibri',
+                    size: 11,
+                    color: { argb: 'FF9CA3AF' },
+                    italic: true,
+                  }
+                } else {
+                  cell.value = null
+                }
               } else {
                 cell.value = cellData.value as any
               }
+            }
+          }
+
+          // Export inputConfig as Excel Data Validation
+          if (cellData.inputConfig) {
+            const config = cellData.inputConfig
+            if (config.type === 'select' && config.options && config.options.length > 0) {
+              cell.dataValidation = {
+                type: 'list',
+                allowBlank: !config.required,
+                formulae: [`"${config.options.join(',')}"`],
+                showErrorMessage: true,
+                errorTitle: 'Invalid Selection',
+                error:
+                  config.validation?.message || `Please select from: ${config.options.join(', ')}`,
+              }
+            } else if (config.type === 'number') {
+              const hasMin = config.validation?.min !== undefined
+              const hasMax = config.validation?.max !== undefined
+              if (hasMin || hasMax) {
+                cell.dataValidation = {
+                  type: 'whole',
+                  operator:
+                    hasMin && hasMax
+                      ? 'between'
+                      : hasMin
+                        ? 'greaterThanOrEqual'
+                        : 'lessThanOrEqual',
+                  allowBlank: !config.required,
+                  formulae:
+                    hasMin && hasMax
+                      ? [config.validation!.min!, config.validation!.max!]
+                      : [hasMin ? config.validation!.min! : config.validation!.max!],
+                  showErrorMessage: true,
+                  errorTitle: 'Invalid Number',
+                  error:
+                    config.validation?.message ||
+                    `Value must be ${hasMin ? `≥ ${config.validation!.min}` : ''}${hasMin && hasMax ? ' and ' : ''}${hasMax ? `≤ ${config.validation!.max}` : ''}`,
+                }
+              }
+            } else if (config.type === 'date') {
+              cell.dataValidation = {
+                type: 'date',
+                operator: 'greaterThanOrEqual',
+                allowBlank: !config.required,
+                formulae: [new Date(1900, 0, 1)],
+                showErrorMessage: true,
+                errorTitle: 'Invalid Date',
+                error: 'Please enter a valid date.',
+              }
+            } else if (config.type === 'boolean') {
+              cell.dataValidation = {
+                type: 'list',
+                allowBlank: true,
+                formulae: ['"YES,NO"'],
+              }
+            }
+
+            // Add input prompt with label/placeholder
+            if (config.label || config.placeholder) {
+              cell.dataValidation = {
+                ...cell.dataValidation,
+                showInputMessage: true,
+                promptTitle: config.label || '',
+                prompt: config.placeholder || (config.required ? '(Required)' : '(Optional)'),
+              } as ExcelJS.DataValidation
             }
           }
 
