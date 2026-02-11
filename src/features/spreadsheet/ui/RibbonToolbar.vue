@@ -103,7 +103,7 @@ const handleFileNameBlur = () => {
 
         <div class="flex items-center gap-2 opacity-95 cursor-default">
           <FileSpreadsheet :size="18" class="text-white" />
-          <span class="font-bold tracking-wide text-sm">Vue Spreadsheet</span>
+          <span class="font-bold tracking-wide text-sm">Vue Excel App</span>
         </div>
 
         <div class="h-4 w-px bg-white/30 rounded-full"></div>
