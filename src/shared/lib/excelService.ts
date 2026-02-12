@@ -298,8 +298,13 @@ const parseSpecialSyntax = (
       displayValue = null
       break
     case 'sign':
-      type = 'image'
+    case 'draw':
+      type = 'draw'
       displayValue = null
+      break
+    case 'uid':
+      type = 'uid'
+      displayValue = defaultValueRaw || null
       break
     default:
       return { value: text, config: undefined }

@@ -1,23 +1,11 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import type { InputConfig, InputType, ValidationRule, UserRole } from '@/shared/types'
-import {
-  X,
-  Settings,
-  List,
-  Type,
-  Hash,
-  Calendar,
-  ToggleLeft,
-  Image as ImageIcon,
-  Shield,
-  GitBranch,
-  AlertCircle,
-  Shapes,
-  Check,
-  Trash2,
-  Sparkles,
-} from 'lucide-vue-next'
+import type { InputConfig, InputType, ValidationRule, UserRole, UidMode } from '@/shared/types'
+import { X, Settings, Shield, GitBranch, AlertCircle, Trash2, Sparkles } from 'lucide-vue-next'
+import ConfigTabGeneral from './cell-config/ConfigTabGeneral.vue'
+import ConfigTabValidation from './cell-config/ConfigTabValidation.vue'
+import ConfigTabLogic from './cell-config/ConfigTabLogic.vue'
+import ConfigTabPermission from './cell-config/ConfigTabPermission.vue'
 
 interface Props {
   isOpen: boolean
@@ -52,26 +40,36 @@ const errorMsg = ref('')
 const depLabel = ref('')
 const depValue = ref('')
 
+// UID Config
+const uidMode = ref<UidMode>('sequential')
+const uidPrefix = ref('')
+const uidSuffix = ref('')
+const uidStartFrom = ref(1)
+
 // Permissions
 const allowedRoles = ref<UserRole[]>([])
+const allowedDepartments = ref<string[]>([])
 
-const inputTypes: { id: InputType; icon: typeof Type; label: string }[] = [
-  { id: 'text', icon: Type, label: 'Text' },
-  { id: 'number', icon: Hash, label: 'Integer' },
-  { id: 'float', icon: Hash, label: 'Float' },
-  { id: 'select', icon: List, label: 'Select' },
-  { id: 'boolean', icon: ToggleLeft, label: 'Toggle' },
-  { id: 'date', icon: Calendar, label: 'Date' },
-  { id: 'symbol', icon: Shapes, label: 'Symbol' },
-  { id: 'image', icon: ImageIcon, label: 'Image' },
+// Symbol
+const defaultSymbols = [
+  '✓',
+  '✗',
+  '●',
+  '○',
+  '■',
+  '□',
+  '▲',
+  '★',
+  '☆',
+  '♦',
+  '⚠',
+  '⬤',
+  '→',
+  '←',
+  '↑',
+  '↓',
 ]
-
-const allRoles: UserRole[] = [
-  'Admin' as UserRole,
-  'Manager' as UserRole,
-  'Staff' as UserRole,
-  'Viewer' as UserRole,
-]
+const symbolOptions = ref<string[]>([...defaultSymbols])
 
 const tabs: { id: Tab; icon: typeof Settings; label: string }[] = [
   { id: 'general', icon: Settings, label: 'General' },
@@ -80,9 +78,11 @@ const tabs: { id: Tab; icon: typeof Settings; label: string }[] = [
   { id: 'permission', icon: Shield, label: 'Access' },
 ]
 
-const logicPreview = computed(() => {
-  if (!depLabel.value || !depValue.value) return ''
-  return `If [${depLabel.value}] = "${depValue.value}" → Show this field`
+const uidPreview = computed(() => {
+  const prefix = uidPrefix.value || ''
+  const suffix = uidSuffix.value || ''
+  const num = uidMode.value === 'sequential' ? String(uidStartFrom.value).padStart(4, '0') : '____'
+  return `${prefix}${num}${suffix}`
 })
 
 // Reset form when modal opens
@@ -110,6 +110,18 @@ watch(
       allowedRoles.value = props.initialConfig.allowedRoles
         ? [...props.initialConfig.allowedRoles]
         : []
+      allowedDepartments.value = props.initialConfig.allowedDepartments
+        ? [...props.initialConfig.allowedDepartments]
+        : []
+
+      if (props.initialConfig.type === 'symbol' && props.initialConfig.options?.length) {
+        symbolOptions.value = [...new Set([...defaultSymbols, ...props.initialConfig.options])]
+      }
+
+      uidMode.value = props.initialConfig.uidConfig?.mode || 'sequential'
+      uidPrefix.value = props.initialConfig.uidConfig?.prefix || ''
+      uidSuffix.value = props.initialConfig.uidConfig?.suffix || ''
+      uidStartFrom.value = props.initialConfig.uidConfig?.startFrom ?? 1
     } else {
       inputType.value = 'text'
       label.value = ''
@@ -123,6 +135,12 @@ watch(
       depLabel.value = ''
       depValue.value = ''
       allowedRoles.value = []
+      allowedDepartments.value = []
+      symbolOptions.value = [...defaultSymbols]
+      uidMode.value = 'sequential'
+      uidPrefix.value = ''
+      uidSuffix.value = ''
+      uidStartFrom.value = 1
     }
   },
 )
@@ -140,6 +158,10 @@ const handleSave = () => {
       .split(',')
       .map((s) => s.trim())
       .filter((s) => s.length > 0)
+  }
+
+  if (inputType.value === 'symbol') {
+    config.options = [...symbolOptions.value]
   }
 
   const validation: ValidationRule = {}
@@ -161,6 +183,19 @@ const handleSave = () => {
     config.allowedRoles = [...allowedRoles.value]
   }
 
+  if (allowedDepartments.value.length > 0) {
+    config.allowedDepartments = [...allowedDepartments.value]
+  }
+
+  if (inputType.value === 'uid') {
+    config.uidConfig = {
+      mode: uidMode.value,
+      prefix: uidPrefix.value || undefined,
+      suffix: uidSuffix.value || undefined,
+      startFrom: uidMode.value === 'sequential' ? uidStartFrom.value : undefined,
+    }
+  }
+
   emit('save', config)
   emit('close')
 }
@@ -168,15 +203,6 @@ const handleSave = () => {
 const handleRemove = () => {
   emit('save', undefined)
   emit('close')
-}
-
-const toggleRole = (role: UserRole) => {
-  const idx = allowedRoles.value.indexOf(role)
-  if (idx >= 0) {
-    allowedRoles.value.splice(idx, 1)
-  } else {
-    allowedRoles.value.push(role)
-  }
 }
 </script>
 
@@ -257,302 +283,41 @@ const toggleRole = (role: UserRole) => {
 
           <!-- Tab Content -->
           <div class="flex-1 overflow-y-auto p-5 space-y-5">
-            <!-- GENERAL TAB -->
-            <template v-if="activeTab === 'general'">
-              <!-- Input Type Grid -->
-              <div>
-                <label
-                  class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-2.5 uppercase tracking-wider"
-                >
-                  Input Type
-                </label>
-                <div class="grid grid-cols-4 gap-2">
-                  <button
-                    v-for="t in inputTypes"
-                    :key="t.id"
-                    class="flex flex-col items-center justify-center py-3 px-2 rounded-xl border transition-all"
-                    :class="
-                      inputType === t.id
-                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-400 dark:border-blue-600 text-blue-600 dark:text-blue-400 shadow-sm shadow-blue-500/10'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
-                    "
-                    @click="inputType = t.id"
-                  >
-                    <component :is="t.icon" :size="18" class="mb-1" />
-                    <span class="text-[10px] font-medium">{{ t.label }}</span>
-                  </button>
-                </div>
-              </div>
+            <ConfigTabGeneral
+              v-if="activeTab === 'general'"
+              v-model:input-type="inputType"
+              v-model:label="label"
+              v-model:placeholder="placeholder"
+              v-model:options-str="optionsStr"
+              v-model:required="required"
+              v-model:uid-mode="uidMode"
+              v-model:uid-prefix="uidPrefix"
+              v-model:uid-suffix="uidSuffix"
+              v-model:uid-start-from="uidStartFrom"
+              v-model:symbol-options="symbolOptions"
+              :uid-preview="uidPreview"
+            />
 
-              <!-- Field Label -->
-              <div>
-                <label
-                  class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
-                >
-                  Field Label
-                  <span class="text-[10px] font-normal text-gray-400 ml-1">Unique ID</span>
-                </label>
-                <input
-                  v-model="label"
-                  type="text"
-                  class="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                  placeholder="e.g. EmployeeName"
-                />
-                <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 ml-1">
-                  Required for conditional logic references.
-                </p>
-              </div>
+            <ConfigTabValidation
+              v-if="activeTab === 'validation'"
+              v-model:min-val="minVal"
+              v-model:max-val="maxVal"
+              v-model:pattern="pattern"
+              v-model:error-msg="errorMsg"
+              :input-type="inputType"
+            />
 
-              <!-- Select Options -->
-              <div v-if="inputType === 'select'">
-                <label
-                  class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
-                >
-                  Options
-                  <span class="text-[10px] font-normal text-gray-400 ml-1">comma separated</span>
-                </label>
-                <textarea
-                  v-model="optionsStr"
-                  class="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all resize-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                  placeholder="Option 1, Option 2, Option 3"
-                  rows="3"
-                ></textarea>
-              </div>
+            <ConfigTabLogic
+              v-if="activeTab === 'logic'"
+              v-model:dep-label="depLabel"
+              v-model:dep-value="depValue"
+            />
 
-              <!-- Placeholder -->
-              <div
-                v-if="
-                  inputType === 'text' ||
-                  inputType === 'number' ||
-                  inputType === 'float' ||
-                  inputType === 'image'
-                "
-              >
-                <label
-                  class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
-                >
-                  Placeholder
-                </label>
-                <input
-                  v-model="placeholder"
-                  type="text"
-                  class="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                  placeholder="Helper text for user"
-                />
-              </div>
-
-              <!-- Required Toggle -->
-              <div
-                class="flex items-center gap-3 p-3.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800 cursor-pointer select-none"
-                @click="required = !required"
-              >
-                <div
-                  class="w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all"
-                  :class="
-                    required
-                      ? 'bg-blue-500 border-blue-500'
-                      : 'border-gray-300 dark:border-gray-600'
-                  "
-                >
-                  <Check v-if="required" :size="12" class="text-white" />
-                </div>
-                <div>
-                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Required Field
-                  </span>
-                  <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-                    Operator must fill this field before submitting
-                  </p>
-                </div>
-              </div>
-            </template>
-
-            <!-- VALIDATION TAB -->
-            <template v-if="activeTab === 'validation'">
-              <div
-                v-if="inputType === 'number' || inputType === 'float'"
-                class="grid grid-cols-2 gap-3"
-              >
-                <div>
-                  <label
-                    class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
-                  >
-                    Min Value
-                  </label>
-                  <input
-                    v-model="minVal"
-                    type="number"
-                    class="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all"
-                  />
-                </div>
-                <div>
-                  <label
-                    class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
-                  >
-                    Max Value
-                  </label>
-                  <input
-                    v-model="maxVal"
-                    type="number"
-                    class="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
-                >
-                  Regex Pattern
-                </label>
-                <input
-                  v-model="pattern"
-                  type="text"
-                  class="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3.5 py-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                  placeholder="e.g. ^[A-Z]{3}$"
-                />
-              </div>
-
-              <div>
-                <label
-                  class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
-                >
-                  Custom Error Message
-                </label>
-                <input
-                  v-model="errorMsg"
-                  type="text"
-                  class="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                  placeholder="Value must be..."
-                />
-              </div>
-
-              <div
-                v-if="inputType !== 'number' && inputType !== 'float' && !pattern && !errorMsg"
-                class="text-center py-8 text-gray-300 dark:text-gray-600"
-              >
-                <AlertCircle :size="32" class="mx-auto mb-2 opacity-50" />
-                <p class="text-xs">Add regex patterns or error messages to validate input</p>
-              </div>
-            </template>
-
-            <!-- LOGIC TAB -->
-            <template v-if="activeTab === 'logic'">
-              <div
-                class="flex gap-2.5 p-3.5 bg-amber-50 dark:bg-amber-900/15 rounded-xl border border-amber-200/60 dark:border-amber-800/40"
-              >
-                <AlertCircle :size="16" class="text-amber-500 shrink-0 mt-0.5" />
-                <p class="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                  Show this field <strong>only if</strong> another field has a specific value.
-                </p>
-              </div>
-
-              <div>
-                <label
-                  class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
-                >
-                  Dependency Field Label
-                </label>
-                <input
-                  v-model="depLabel"
-                  type="text"
-                  class="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                  placeholder="e.g. Gender"
-                />
-              </div>
-
-              <div>
-                <label
-                  class="block text-[12px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5"
-                >
-                  Required Value
-                </label>
-                <input
-                  v-model="depValue"
-                  type="text"
-                  class="w-full border border-gray-200 dark:border-gray-700 dark:bg-gray-800 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 outline-none transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                  placeholder="e.g. Female"
-                />
-              </div>
-
-              <!-- Logic Preview -->
-              <div
-                v-if="logicPreview"
-                class="p-3.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800"
-              >
-                <p class="text-[10px] text-gray-400 uppercase font-semibold tracking-wider mb-1.5">
-                  Preview
-                </p>
-                <p class="text-xs text-gray-600 dark:text-gray-300 font-medium">
-                  {{ logicPreview }}
-                </p>
-              </div>
-            </template>
-
-            <!-- PERMISSION TAB -->
-            <template v-if="activeTab === 'permission'">
-              <div
-                class="flex gap-2.5 p-3.5 bg-blue-50 dark:bg-blue-900/15 rounded-xl border border-blue-200/60 dark:border-blue-800/40"
-              >
-                <Shield :size="16" class="text-blue-500 shrink-0 mt-0.5" />
-                <div class="text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed">
-                  <p>Select roles that can edit this cell.</p>
-                  <p class="text-blue-500/70 dark:text-blue-400/50 mt-0.5">
-                    If empty, column-level permissions apply.
-                  </p>
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <button
-                  v-for="role in allRoles"
-                  :key="role"
-                  class="w-full flex items-center justify-between p-3.5 rounded-xl border transition-all"
-                  :class="
-                    allowedRoles.includes(role)
-                      ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400 dark:border-blue-700 shadow-sm shadow-blue-500/10'
-                      : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  "
-                  @click="toggleRole(role)"
-                >
-                  <div class="flex items-center gap-3">
-                    <div
-                      class="w-8 h-8 rounded-lg flex items-center justify-center"
-                      :class="
-                        allowedRoles.includes(role)
-                          ? 'bg-blue-100 dark:bg-blue-800/40'
-                          : 'bg-gray-100 dark:bg-gray-700'
-                      "
-                    >
-                      <Shield
-                        :size="14"
-                        :class="
-                          allowedRoles.includes(role)
-                            ? 'text-blue-600 dark:text-blue-400'
-                            : 'text-gray-400 dark:text-gray-500'
-                        "
-                      />
-                    </div>
-                    <span
-                      class="text-sm font-medium"
-                      :class="
-                        allowedRoles.includes(role)
-                          ? 'text-blue-700 dark:text-blue-300'
-                          : 'text-gray-700 dark:text-gray-300'
-                      "
-                    >
-                      {{ role }}
-                    </span>
-                  </div>
-                  <div
-                    v-if="allowedRoles.includes(role)"
-                    class="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center"
-                  >
-                    <Check :size="12" class="text-white" />
-                  </div>
-                </button>
-              </div>
-            </template>
+            <ConfigTabPermission
+              v-if="activeTab === 'permission'"
+              v-model:allowed-roles="allowedRoles"
+              v-model:allowed-departments="allowedDepartments"
+            />
           </div>
 
           <!-- Footer -->

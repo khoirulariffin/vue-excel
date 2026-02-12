@@ -22,8 +22,19 @@ export type InputType =
   | 'select'
   | 'boolean'
   | 'image'
+  | 'draw'
+  | 'uid'
   | 'date'
   | 'symbol'
+
+export type UidMode = 'sequential' | 'manual'
+
+export interface UidConfig {
+  mode: UidMode
+  prefix?: string
+  suffix?: string
+  startFrom?: number
+}
 
 export interface ValidationRule {
   min?: number
@@ -49,6 +60,8 @@ export interface InputConfig {
   validation?: ValidationRule
   conditional?: ConditionalLogic
   allowedRoles?: UserRole[]
+  allowedDepartments?: string[]
+  uidConfig?: UidConfig
 }
 
 export interface BorderStyle {

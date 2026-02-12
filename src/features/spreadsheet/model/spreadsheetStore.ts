@@ -38,6 +38,7 @@ export const useSpreadsheetStore = defineStore('spreadsheet', () => {
   // Editor state
   const appMode = ref<AppMode>('manual')
   const currentUserRole = ref<UserRole>(UserRole.ADMIN)
+  const currentUserDepartment = ref<string>('')
   const showGridlines = ref(true)
   const zoom = ref(1.0)
   const selectedCell = ref<SelectedCell | null>(null)
@@ -560,6 +561,7 @@ export const useSpreadsheetStore = defineStore('spreadsheet', () => {
     error,
     appMode,
     currentUserRole,
+    currentUserDepartment,
     showGridlines,
     zoom,
     selectedCell,

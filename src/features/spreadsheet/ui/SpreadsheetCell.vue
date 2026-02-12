@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, nextTick, watch } from 'vue'
-import { ImagePlus } from 'lucide-vue-next'
 import type { CellData, InputConfig } from '@/shared/types'
 import type { MergeInfo } from '@/features/spreadsheet/lib/useMergeMap'
 import { buildCellCssStyle, buildCellContentStyle } from '@/features/spreadsheet/lib/useCellStyle'
@@ -9,6 +8,8 @@ import { useSpreadsheetStore } from '@/features/spreadsheet/model/spreadsheetSto
 import { evaluateFormula } from '@/shared/lib/formulaEngine'
 import { getColumnLabel } from '@/shared/lib/excelService'
 import CellConfigModal from './CellConfigModal.vue'
+import OperatorInputs from './cell-config/OperatorInputs.vue'
+import DrawPadModal from './cell-config/DrawPadModal.vue'
 
 interface Props {
   cellData: CellData
@@ -129,6 +130,12 @@ const isCellEnabledForOperator = computed(() => {
     if (!config.allowedRoles.includes(store.currentUserRole)) return false
   }
 
+  // Check department-based access
+  if (config.allowedDepartments && config.allowedDepartments.length > 0) {
+    const userDept = store.currentUserDepartment
+    if (userDept && !config.allowedDepartments.includes(userDept)) return false
+  }
+
   // Check conditional logic
   if (config.conditional) {
     const sheet = store.activeSheet
@@ -192,6 +199,42 @@ const handleImageUpload = (e: Event) => {
   }
   reader.readAsDataURL(file)
   input.value = ''
+}
+
+// --- Draw / Signature ---
+const showDrawPad = ref(false)
+
+const handleDrawSave = (dataUrl: string) => {
+  store.updateCellValue(props.rowIndex, props.colIndex, dataUrl)
+  showDrawPad.value = false
+}
+
+// --- UID ---
+const generateSequentialUid = () => {
+  const config = liveCell.value.inputConfig
+  if (!config?.uidConfig) return
+  const uc = config.uidConfig
+  const prefix = uc.prefix || ''
+  const suffix = uc.suffix || ''
+  // Find max existing UID across all rows in this column
+  let maxNum = (uc.startFrom ?? 1) - 1
+  const sheet = store.activeSheet
+  if (sheet) {
+    for (const rowKey of Object.keys(sheet.rows)) {
+      const cell = sheet.rows[Number(rowKey)]?.[props.colIndex]
+      if (cell?.value && typeof cell.value === 'string') {
+        const val = cell.value
+        if (val.startsWith(prefix) && val.endsWith(suffix)) {
+          const numPart = val.slice(prefix.length, suffix ? val.length - suffix.length : undefined)
+          const num = parseInt(numPart, 10)
+          if (!isNaN(num) && num > maxNum) maxNum = num
+        }
+      }
+    }
+  }
+  const nextNum = maxNum + 1
+  const uid = `${prefix}${String(nextNum).padStart(4, '0')}${suffix}`
+  store.updateCellValue(props.rowIndex, props.colIndex, uid)
 }
 
 const handleOperatorInput = (e: Event) => {
@@ -279,140 +322,16 @@ watch(editValue, (val) => {
     ></div>
 
     <!-- Operator Mode: Input Widgets -->
-    <template v-if="isCellEnabledForOperator">
-      <!-- Required indicator -->
-      <span
-        v-if="liveCell.inputConfig?.required"
-        class="absolute top-0 right-0.5 text-red-500 text-base font-bold z-30 leading-none"
-        >*</span
-      >
-
-      <!-- Text Input -->
-      <input
-        v-if="liveCell.inputConfig?.type === 'text'"
-        :value="operatorValue"
-        type="text"
-        class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 text-[11pt] px-1 outline-none border-none m-0"
-        :style="{ color: operatorTextColor }"
-        :placeholder="liveCell.inputConfig?.placeholder || ''"
+    <template v-if="isCellEnabledForOperator && liveCell.inputConfig">
+      <OperatorInputs
+        :input-config="liveCell.inputConfig"
+        :operator-value="operatorValue"
+        :operator-text-color="operatorTextColor"
         @input="handleOperatorInput"
-      />
-
-      <!-- Number Input (int) -->
-      <input
-        v-else-if="liveCell.inputConfig?.type === 'number'"
-        :value="operatorValue"
-        type="number"
-        step="1"
-        class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 text-[11pt] px-1 outline-none border-none m-0"
-        :style="{ color: operatorTextColor }"
-        :placeholder="liveCell.inputConfig?.placeholder || ''"
-        :min="liveCell.inputConfig?.validation?.min"
-        :max="liveCell.inputConfig?.validation?.max"
-        @input="handleOperatorInput"
-      />
-
-      <!-- Float Input -->
-      <input
-        v-else-if="liveCell.inputConfig?.type === 'float'"
-        :value="operatorValue"
-        type="number"
-        step="any"
-        class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 text-[11pt] px-1 outline-none border-none m-0"
-        :style="{ color: operatorTextColor }"
-        :placeholder="liveCell.inputConfig?.placeholder || ''"
-        :min="liveCell.inputConfig?.validation?.min"
-        :max="liveCell.inputConfig?.validation?.max"
-        @input="handleOperatorInput"
-      />
-
-      <!-- Select Dropdown -->
-      <select
-        v-else-if="liveCell.inputConfig?.type === 'select'"
-        :value="operatorValue"
-        class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 text-[11pt] px-0.5 outline-none border-none m-0 cursor-pointer"
-        :style="{ color: operatorValue ? operatorTextColor : '#9ca3af' }"
-        @change="handleOperatorInput"
-      >
-        <option value="" disabled>{{ liveCell.inputConfig?.placeholder || '-- Select --' }}</option>
-        <option
-          v-for="opt in liveCell.inputConfig?.options || []"
-          :key="opt"
-          :value="opt"
-          :style="{ color: operatorTextColor }"
-        >
-          {{ opt }}
-        </option>
-      </select>
-
-      <!-- Boolean Toggle -->
-      <div
-        v-else-if="liveCell.inputConfig?.type === 'boolean'"
-        class="w-full h-full flex items-center justify-center bg-blue-50/40 dark:bg-blue-900/20 cursor-pointer"
-        @click.stop="handleBooleanToggle"
-      >
-        <div
-          class="w-8 h-[18px] rounded-full transition-all relative"
-          :class="operatorValue === 'true' ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
-        >
-          <div
-            class="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-all"
-            :class="operatorValue === 'true' ? 'left-[16px]' : 'left-[2px]'"
-          ></div>
-        </div>
-      </div>
-
-      <!-- Image Upload -->
-      <div
-        v-else-if="liveCell.inputConfig?.type === 'image'"
-        class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 flex items-center justify-center overflow-hidden relative group cursor-pointer"
-        @click.stop="($refs.imageInput as HTMLInputElement)?.click()"
-      >
-        <img
-          v-if="operatorValue && operatorValue.startsWith('data:image')"
-          :src="operatorValue"
-          alt="uploaded"
-          class="h-full w-auto object-contain"
-        />
-        <div v-else class="flex flex-col items-center gap-0.5 text-gray-400 dark:text-gray-500">
-          <ImagePlus :size="18" />
-          <span class="text-[8pt]">{{ liveCell.inputConfig?.placeholder || 'Upload' }}</span>
-        </div>
-        <!-- Hover overlay to re-upload -->
-        <div
-          v-if="operatorValue && operatorValue.startsWith('data:image')"
-          class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <ImagePlus :size="16" class="text-white" />
-        </div>
-        <input
-          ref="imageInput"
-          type="file"
-          accept="image/*"
-          class="hidden"
-          @change="handleImageUpload"
-        />
-      </div>
-
-      <!-- Date Input -->
-      <input
-        v-else-if="liveCell.inputConfig?.type === 'date'"
-        :value="operatorValue"
-        type="date"
-        class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 text-[10pt] px-0.5 outline-none border-none m-0 cursor-pointer"
-        :style="{ color: operatorTextColor }"
-        @input="handleOperatorInput"
-      />
-
-      <!-- Fallback: text input for symbol/image/etc -->
-      <input
-        v-else
-        :value="operatorValue"
-        type="text"
-        class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 text-[11pt] px-1 outline-none border-none m-0"
-        :style="{ color: operatorTextColor }"
-        :placeholder="liveCell.inputConfig?.placeholder || ''"
-        @input="handleOperatorInput"
+        @boolean-toggle="handleBooleanToggle"
+        @image-upload="handleImageUpload"
+        @open-draw="showDrawPad = true"
+        @generate-uid="generateSequentialUid"
       />
     </template>
 
@@ -459,6 +378,14 @@ watch(editValue, (val) => {
         <template v-else>{{ displayValue }}</template>
       </div>
     </template>
+
+    <!-- Draw Pad Modal -->
+    <DrawPadModal
+      :is-open="showDrawPad"
+      :initial-image="operatorValue"
+      @close="showDrawPad = false"
+      @save="handleDrawSave"
+    />
 
     <!-- Cell Config Modal -->
     <CellConfigModal

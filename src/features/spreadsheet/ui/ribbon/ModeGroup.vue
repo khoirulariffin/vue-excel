@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
-import { PenTool, Eye, Grid3x3, Shield } from 'lucide-vue-next'
+import { PenTool, Eye, Grid3x3, Shield, Building2 } from 'lucide-vue-next'
 import { useSpreadsheetStore } from '@/features/spreadsheet/model/spreadsheetStore'
 import type { AppMode } from '@/shared/types'
 import { UserRole } from '@/shared/types'
@@ -13,6 +13,18 @@ const roleOptions: { value: UserRole; label: string }[] = [
   { value: UserRole.MANAGER, label: 'Manager' },
   { value: UserRole.STAFF, label: 'Staff' },
   { value: UserRole.VIEWER, label: 'Viewer' },
+]
+
+const departmentOptions: string[] = [
+  '',
+  'Engineering',
+  'Marketing',
+  'Finance',
+  'HR',
+  'Operations',
+  'Sales',
+  'Legal',
+  'IT',
 ]
 
 const handleSwitchMode = (mode: AppMode) => {
@@ -118,6 +130,35 @@ const modes: { key: AppMode; label: string; icon: Component; color: string; bg: 
       class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider mt-1 select-none"
       >As</span
     >
+    <div class="absolute right-0 top-2 bottom-2 w-px bg-gray-200 dark:bg-gray-700"></div>
+  </div>
+
+  <!-- Department Selector (visible in Operator mode) -->
+  <div
+    v-if="store.appMode === 'operator'"
+    class="flex flex-col items-center px-2 relative h-full justify-between py-1"
+  >
+    <div class="flex flex-col items-center justify-center h-full gap-1">
+      <div class="flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+        <Building2 :size="13" />
+        <span class="text-[10px] font-semibold uppercase tracking-wider">Dept</span>
+      </div>
+      <select
+        :value="store.currentUserDepartment"
+        class="h-7 px-2 text-xs font-medium rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 cursor-pointer"
+        @change="
+          (e: Event) => (store.currentUserDepartment = (e.target as HTMLSelectElement).value)
+        "
+      >
+        <option value="">All</option>
+        <option v-for="dept in departmentOptions.filter((d) => d)" :key="dept" :value="dept">
+          {{ dept }}
+        </option>
+      </select>
+    </div>
+    <span
+      class="text-[10px] text-gray-400 dark:text-gray-500 font-medium uppercase tracking-wider mt-1 select-none"
+    ></span>
     <div class="absolute right-0 top-2 bottom-2 w-px bg-gray-200 dark:bg-gray-700"></div>
   </div>
 </template>
