@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { FileSpreadsheet, Upload, Loader2 } from 'lucide-vue-next'
+import { FileSpreadsheet, Upload, Loader2, ArrowRight } from 'lucide-vue-next'
 import { useSpreadsheetStore } from '@/features/spreadsheet/model/spreadsheetStore'
 
 const router = useRouter()
@@ -116,6 +116,15 @@ const processFile = async (file: File) => {
         >
           {{ store.error }}
         </div>
+
+        <!-- Open Editor Button -->
+        <button
+          class="w-full mt-6 flex items-center justify-center gap-2 px-6 py-3 bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white font-semibold rounded-xl shadow-lg shadow-primary-500/25 transition-all duration-200"
+          @click="router.push('/editor')"
+        >
+          Open Editor
+          <ArrowRight :size="18" />
+        </button>
 
         <!-- Hidden File Input -->
         <input

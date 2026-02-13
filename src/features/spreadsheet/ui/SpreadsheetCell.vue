@@ -311,6 +311,9 @@ const { handleTouchEnd: cellTouchEnd, cleanup: cleanupTouch } = useTouchGestures
 })
 
 const handleCellTouchEnd = (e: TouchEvent) => {
+  // Don't preventDefault for enabled operator cells — let native click reach child inputs
+  if (isCellEnabledForOperator.value) return
+  e.preventDefault()
   cellTouchEnd(
     e,
     () => handleCellClick(),
@@ -343,7 +346,7 @@ onUnmounted(() => cleanupTouch())
     @mouseenter="emit('cellmouseenter', rowIndex, colIndex)"
     @dblclick.stop="handleDoubleClick"
     @touchstart.passive="handleCellTouchStart"
-    @touchend.prevent="handleCellTouchEnd"
+    @touchend="handleCellTouchEnd"
   >
     <!-- Designer Mode: Config Badge -->
     <div
