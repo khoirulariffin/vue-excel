@@ -7,9 +7,12 @@ import { useThemeStore } from '@/features/theme/model/themeStore'
 import { useSpreadsheetStore } from '@/features/spreadsheet/model/spreadsheetStore'
 import { evaluateFormula } from '@/shared/lib/formulaEngine'
 import { getColumnLabel } from '@/shared/lib/excelService'
+import { isImageValue, useCellImage } from '@/features/spreadsheet/lib/useCellImage'
 import CellConfigModal from './CellConfigModal.vue'
 import OperatorInputs from './cell-config/OperatorInputs.vue'
 import DrawPadModal from './cell-config/DrawPadModal.vue'
+import ImagePreviewModal from './cell-config/ImagePreviewModal.vue'
+import CellImageDisplay from './cell-config/CellImageDisplay.vue'
 
 interface Props {
   cellData: CellData
@@ -38,9 +41,6 @@ const isEditing = computed(() => {
   const ec = store.editingCell
   return ec !== null && ec.row === props.rowIndex && ec.col === props.colIndex
 })
-
-const isImageValue = (val: string | number | null) =>
-  typeof val === 'string' && val.startsWith('data:image')
 
 // Read cell directly from store for reactivity (triggerRef(sheets) triggers these)
 const liveCell = computed(() => {
@@ -81,6 +81,12 @@ const displayValue = computed(() => {
 const handleDoubleClick = () => {
   // Only allow editing in Manual mode
   if (store.appMode !== 'manual') return
+
+  // If cell has an image, open preview modal instead of text editing
+  if (isImageValue(liveCell.value.value)) {
+    showImagePreview.value = true
+    return
+  }
 
   const val = liveCell.value.value
   editValue.value = val !== null && val !== undefined ? String(val) : ''
@@ -188,26 +194,28 @@ const commitOperatorValue = (val: string) => {
   store.updateCellValue(props.rowIndex, props.colIndex, finalVal)
 }
 
-const handleImageUpload = (e: Event) => {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    const dataUrl = reader.result as string
-    store.updateCellValue(props.rowIndex, props.colIndex, dataUrl)
-  }
-  reader.readAsDataURL(file)
-  input.value = ''
-}
-
-// --- Draw / Signature ---
-const showDrawPad = ref(false)
-
-const handleDrawSave = (dataUrl: string) => {
-  store.updateCellValue(props.rowIndex, props.colIndex, dataUrl)
-  showDrawPad.value = false
-}
+// --- Image / Draw / Resize (composable) ---
+const {
+  showImagePreview,
+  showDrawPad,
+  currentImageSrc,
+  showResizeHandle,
+  handleImagePreviewSave,
+  handleImageDelete,
+  handleImageReplace,
+  handleImageUpload,
+  handleDrawSave,
+  handleImgResizeStart,
+  handleWidthResizeStart,
+  handleHeightResizeStart,
+} = useCellImage(
+  () => props.rowIndex,
+  () => props.colIndex,
+  () => props.rowHeight,
+  () => props.isSelected ?? false,
+  () => liveCell.value.value,
+  () => operatorValue.value,
+)
 
 // --- UID ---
 const generateSequentialUid = () => {
@@ -327,11 +335,17 @@ watch(editValue, (val) => {
         :input-config="liveCell.inputConfig"
         :operator-value="operatorValue"
         :operator-text-color="operatorTextColor"
+        :show-resize-handle="showResizeHandle"
         @input="handleOperatorInput"
         @boolean-toggle="handleBooleanToggle"
         @image-upload="handleImageUpload"
         @open-draw="showDrawPad = true"
         @generate-uid="generateSequentialUid"
+        @open-image-preview="showImagePreview = true"
+        @clear-image="handleImageDelete"
+        @resize-start="handleImgResizeStart"
+        @width-resize-start="handleWidthResizeStart"
+        @height-resize-start="handleHeightResizeStart"
       />
     </template>
 
@@ -356,11 +370,15 @@ watch(editValue, (val) => {
         >
           {{ liveCell.inputConfig?.type }}
         </span>
-        <img
+        <!-- Image display with hover overlay + resize handles -->
+        <CellImageDisplay
           v-else-if="isImageValue(liveCell.value)"
-          :src="liveCell.value as string"
-          alt="cell-img"
-          class="h-full w-auto object-contain"
+          :image-src="liveCell.value as string"
+          :show-resize-handle="showResizeHandle"
+          @open-preview="showImagePreview = true"
+          @resize-start="handleImgResizeStart"
+          @width-resize-start="handleWidthResizeStart"
+          @height-resize-start="handleHeightResizeStart"
         />
         <template v-else>{{ displayValue }}</template>
       </div>
@@ -385,6 +403,18 @@ watch(editValue, (val) => {
       :initial-image="operatorValue"
       @close="showDrawPad = false"
       @save="handleDrawSave"
+    />
+
+    <!-- Image Preview Modal -->
+    <ImagePreviewModal
+      :is-open="showImagePreview"
+      :image-src="currentImageSrc"
+      :allow-delete="true"
+      :allow-replace="true"
+      @close="showImagePreview = false"
+      @save="handleImagePreviewSave"
+      @delete="handleImageDelete"
+      @replace="handleImageReplace"
     />
 
     <!-- Cell Config Modal -->

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ImagePlus, PenTool, Fingerprint } from 'lucide-vue-next'
+import { ImagePlus, PenTool, Fingerprint, Maximize2, Trash2 } from 'lucide-vue-next'
 import type { InputConfig } from '@/shared/types'
+import CellImageDisplay from './CellImageDisplay.vue'
 
 interface Props {
   inputConfig: InputConfig
   operatorValue: string
   operatorTextColor: string
+  showResizeHandle?: boolean
 }
 
 defineProps<Props>()
@@ -15,6 +17,11 @@ const emit = defineEmits<{
   imageUpload: [e: Event]
   openDraw: []
   generateUid: []
+  openImagePreview: []
+  clearImage: []
+  resizeStart: [e: MouseEvent]
+  widthResizeStart: [e: MouseEvent]
+  heightResizeStart: [e: MouseEvent]
 }>()
 </script>
 
@@ -105,24 +112,52 @@ const emit = defineEmits<{
   <div
     v-else-if="inputConfig.type === 'image'"
     class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 flex items-center justify-center overflow-hidden relative group cursor-pointer"
-    @click.stop="($refs.imageInput as HTMLInputElement)?.click()"
+    @click.stop="
+      operatorValue && operatorValue.startsWith('data:image')
+        ? undefined
+        : ($refs.imageInput as HTMLInputElement)?.click()
+    "
   >
-    <img
+    <!-- Image with resize handles -->
+    <CellImageDisplay
       v-if="operatorValue && operatorValue.startsWith('data:image')"
-      :src="operatorValue"
-      alt="uploaded"
-      class="h-full w-auto object-contain"
+      :image-src="operatorValue"
+      :show-resize-handle="showResizeHandle ?? false"
+      @open-preview="emit('openImagePreview')"
+      @resize-start="emit('resizeStart', $event)"
+      @width-resize-start="emit('widthResizeStart', $event)"
+      @height-resize-start="emit('heightResizeStart', $event)"
     />
     <div v-else class="flex flex-col items-center gap-0.5 text-gray-400 dark:text-gray-500">
       <ImagePlus :size="18" />
       <span class="text-[8pt]">{{ inputConfig.placeholder || 'Upload' }}</span>
     </div>
-    <!-- Hover overlay to re-upload -->
+    <!-- Hover overlay with actions -->
     <div
       v-if="operatorValue && operatorValue.startsWith('data:image')"
-      class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+      class="absolute inset-0 bg-black/40 flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-30"
     >
-      <ImagePlus :size="16" class="text-white" />
+      <button
+        class="p-1 rounded bg-white/20 hover:bg-white/40 transition-colors"
+        title="Preview & Edit"
+        @click.stop="emit('openImagePreview')"
+      >
+        <Maximize2 :size="12" class="text-white" />
+      </button>
+      <button
+        class="p-1 rounded bg-white/20 hover:bg-white/40 transition-colors"
+        title="Replace"
+        @click.stop="($refs.imageInput as HTMLInputElement)?.click()"
+      >
+        <ImagePlus :size="12" class="text-white" />
+      </button>
+      <button
+        class="p-1 rounded bg-red-500/40 hover:bg-red-500/70 transition-colors"
+        title="Delete"
+        @click.stop="emit('clearImage')"
+      >
+        <Trash2 :size="12" class="text-white" />
+      </button>
     </div>
     <input
       ref="imageInput"
@@ -137,23 +172,50 @@ const emit = defineEmits<{
   <div
     v-else-if="inputConfig.type === 'draw'"
     class="w-full h-full bg-blue-50/40 dark:bg-blue-900/20 flex items-center justify-center overflow-hidden relative group cursor-pointer"
-    @click.stop="emit('openDraw')"
+    @click.stop="
+      operatorValue && operatorValue.startsWith('data:image') ? undefined : emit('openDraw')
+    "
   >
-    <img
+    <!-- Signature image with resize handles -->
+    <CellImageDisplay
       v-if="operatorValue && operatorValue.startsWith('data:image')"
-      :src="operatorValue"
-      alt="signature"
-      class="h-full w-auto object-contain"
+      :image-src="operatorValue"
+      :show-resize-handle="showResizeHandle ?? false"
+      @open-preview="emit('openImagePreview')"
+      @resize-start="emit('resizeStart', $event)"
+      @width-resize-start="emit('widthResizeStart', $event)"
+      @height-resize-start="emit('heightResizeStart', $event)"
     />
     <div v-else class="flex flex-col items-center gap-0.5 text-gray-400 dark:text-gray-500">
       <PenTool :size="18" />
       <span class="text-[8pt]">{{ inputConfig.placeholder || 'Sign here' }}</span>
     </div>
+    <!-- Hover overlay with actions -->
     <div
       v-if="operatorValue && operatorValue.startsWith('data:image')"
-      class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+      class="absolute inset-0 bg-black/40 flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-30"
     >
-      <PenTool :size="16" class="text-white" />
+      <button
+        class="p-1 rounded bg-white/20 hover:bg-white/40 transition-colors"
+        title="Preview & Edit"
+        @click.stop="emit('openImagePreview')"
+      >
+        <Maximize2 :size="12" class="text-white" />
+      </button>
+      <button
+        class="p-1 rounded bg-white/20 hover:bg-white/40 transition-colors"
+        title="Re-draw"
+        @click.stop="emit('openDraw')"
+      >
+        <PenTool :size="12" class="text-white" />
+      </button>
+      <button
+        class="p-1 rounded bg-red-500/40 hover:bg-red-500/70 transition-colors"
+        title="Delete"
+        @click.stop="emit('clearImage')"
+      >
+        <Trash2 :size="12" class="text-white" />
+      </button>
     </div>
   </div>
 
@@ -169,9 +231,7 @@ const emit = defineEmits<{
         class="w-full h-full bg-transparent text-[11pt] px-1 outline-none border-none m-0 font-mono"
         :style="{ color: operatorTextColor }"
         :placeholder="
-          (inputConfig.uidConfig?.prefix || '') +
-          '____' +
-          (inputConfig.uidConfig?.suffix || '')
+          (inputConfig.uidConfig?.prefix || '') + '____' + (inputConfig.uidConfig?.suffix || '')
         "
         @input="emit('input', $event)"
       />
