@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, nextTick, watch } from 'vue'
+import { computed, ref, nextTick, watch, onUnmounted } from 'vue'
 import type { CellData, InputConfig } from '@/shared/types'
 import type { MergeInfo } from '@/features/spreadsheet/lib/useMergeMap'
 import { buildCellCssStyle, buildCellContentStyle } from '@/features/spreadsheet/lib/useCellStyle'
@@ -8,6 +8,7 @@ import { useSpreadsheetStore } from '@/features/spreadsheet/model/spreadsheetSto
 import { evaluateFormula } from '@/shared/lib/formulaEngine'
 import { getColumnLabel } from '@/shared/lib/excelService'
 import { isImageValue, useCellImage } from '@/features/spreadsheet/lib/useCellImage'
+import { useTouchGestures } from '@/shared/lib/useTouchGestures'
 import CellConfigModal from './CellConfigModal.vue'
 import OperatorInputs from './cell-config/OperatorInputs.vue'
 import DrawPadModal from './cell-config/DrawPadModal.vue'
@@ -208,6 +209,9 @@ const {
   handleImgResizeStart,
   handleWidthResizeStart,
   handleHeightResizeStart,
+  handleTouchImgResizeStart,
+  handleTouchWidthResizeStart,
+  handleTouchHeightResizeStart,
 } = useCellImage(
   () => props.rowIndex,
   () => props.colIndex,
@@ -300,6 +304,27 @@ watch(editValue, (val) => {
     store.pendingEditValue = val
   }
 })
+
+// --- Touch gestures (tablet support) ---
+const { handleTouchEnd: cellTouchEnd, cleanup: cleanupTouch } = useTouchGestures({
+  immediateOnTap: true,
+})
+
+const handleCellTouchEnd = (e: TouchEvent) => {
+  cellTouchEnd(
+    e,
+    () => handleCellClick(),
+    () => handleDoubleClick(),
+  )
+}
+
+const handleCellTouchStart = (e: TouchEvent) => {
+  const touch = e.touches[0]
+  if (!touch) return
+  emit('cellmousedown', props.rowIndex, props.colIndex)
+}
+
+onUnmounted(() => cleanupTouch())
 </script>
 
 <template>
@@ -317,6 +342,8 @@ watch(editValue, (val) => {
     @mousedown.left="emit('cellmousedown', rowIndex, colIndex)"
     @mouseenter="emit('cellmouseenter', rowIndex, colIndex)"
     @dblclick.stop="handleDoubleClick"
+    @touchstart.passive="handleCellTouchStart"
+    @touchend.prevent="handleCellTouchEnd"
   >
     <!-- Designer Mode: Config Badge -->
     <div
@@ -346,6 +373,9 @@ watch(editValue, (val) => {
         @resize-start="handleImgResizeStart"
         @width-resize-start="handleWidthResizeStart"
         @height-resize-start="handleHeightResizeStart"
+        @touch-resize-start="handleTouchImgResizeStart"
+        @touch-width-resize-start="handleTouchWidthResizeStart"
+        @touch-height-resize-start="handleTouchHeightResizeStart"
       />
     </template>
 
@@ -379,6 +409,9 @@ watch(editValue, (val) => {
           @resize-start="handleImgResizeStart"
           @width-resize-start="handleWidthResizeStart"
           @height-resize-start="handleHeightResizeStart"
+          @touch-resize-start="handleTouchImgResizeStart"
+          @touch-width-resize-start="handleTouchWidthResizeStart"
+          @touch-height-resize-start="handleTouchHeightResizeStart"
         />
         <template v-else>{{ displayValue }}</template>
       </div>

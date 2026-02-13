@@ -51,6 +51,9 @@ const {
   handleCanvasMouseDown,
   handleCanvasMouseMove,
   handleCanvasMouseUp,
+  handleCanvasTouchStart,
+  handleCanvasTouchMove,
+  handleCanvasTouchEnd,
 } = useImageCanvas(
   () => props.imageSrc,
   () => props.isOpen,
@@ -154,6 +157,9 @@ const handleSave = () => {
               @mousemove="handleCanvasMouseMove"
               @mouseup="handleCanvasMouseUp"
               @mouseleave="handleCanvasMouseUp"
+              @touchstart="handleCanvasTouchStart"
+              @touchmove="handleCanvasTouchMove"
+              @touchend="handleCanvasTouchEnd"
             ></canvas>
           </div>
 

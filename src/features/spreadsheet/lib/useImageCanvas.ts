@@ -1,4 +1,5 @@
 import { ref, computed, watch, nextTick } from 'vue'
+import { touchToMouseCoords } from '@/shared/lib/useTouchGestures'
 
 export interface DrawStroke {
   points: { x: number; y: number }[]
@@ -29,8 +30,14 @@ export const useImageCanvas = (imageSrc: () => string, isOpen: () => boolean) =>
   const currentStroke = ref<{ x: number; y: number }[]>([])
 
   const drawColors = [
-    '#ef4444', '#f97316', '#eab308', '#22c55e',
-    '#3b82f6', '#8b5cf6', '#ec4899', '#000000',
+    '#ef4444',
+    '#f97316',
+    '#eab308',
+    '#22c55e',
+    '#3b82f6',
+    '#8b5cf6',
+    '#ec4899',
+    '#000000',
     '#ffffff',
   ]
 
@@ -220,16 +227,18 @@ export const useImageCanvas = (imageSrc: () => string, isOpen: () => boolean) =>
     }
   }
 
-  // --- Canvas mouse events ---
-  const getCanvasCoords = (e: MouseEvent) => {
+  // --- Canvas coordinate helpers ---
+  const getCanvasCoordsFromXY = (clientX: number, clientY: number) => {
     const canvas = canvasRef.value
     if (!canvas) return { x: 0, y: 0 }
     const rect = canvas.getBoundingClientRect()
     return {
-      x: Math.max(0, Math.min(e.clientX - rect.left, rect.width)),
-      y: Math.max(0, Math.min(e.clientY - rect.top, rect.height)),
+      x: Math.max(0, Math.min(clientX - rect.left, rect.width)),
+      y: Math.max(0, Math.min(clientY - rect.top, rect.height)),
     }
   }
+
+  const getCanvasCoords = (e: MouseEvent) => getCanvasCoordsFromXY(e.clientX, e.clientY)
 
   const drawStrokesOnCanvas = () => {
     const canvas = canvasRef.value
@@ -310,6 +319,42 @@ export const useImageCanvas = (imageSrc: () => string, isOpen: () => boolean) =>
       isDrawingStroke.value = false
       drawCanvas()
     }
+  }
+
+  // --- Canvas touch events (tablet support) ---
+  const handleCanvasTouchStart = (e: TouchEvent) => {
+    if (!isCropping.value && !drawMode.value) return
+    e.preventDefault()
+    const { clientX, clientY } = touchToMouseCoords(e)
+    const coords = getCanvasCoordsFromXY(clientX, clientY)
+    if (isCropping.value) {
+      isCropDragging.value = true
+      cropStart.value = coords
+      cropEnd.value = coords
+    } else if (drawMode.value) {
+      isDrawingStroke.value = true
+      currentStroke.value = [coords]
+    }
+  }
+
+  const handleCanvasTouchMove = (e: TouchEvent) => {
+    if (!isCropDragging.value && !isDrawingStroke.value) return
+    e.preventDefault()
+    const { clientX, clientY } = touchToMouseCoords(e)
+    const coords = getCanvasCoordsFromXY(clientX, clientY)
+    if (isCropDragging.value) {
+      cropEnd.value = coords
+      drawCanvas()
+    } else if (isDrawingStroke.value) {
+      currentStroke.value.push(coords)
+      drawCanvas()
+      drawStrokesOnCanvas()
+    }
+  }
+
+  const handleCanvasTouchEnd = (e: TouchEvent) => {
+    e.preventDefault()
+    handleCanvasMouseUp()
   }
 
   // --- Crop apply ---
@@ -454,9 +499,13 @@ export const useImageCanvas = (imageSrc: () => string, isOpen: () => boolean) =>
     undoDrawStroke,
     applyCrop,
     exportImage,
-    // Canvas events
+    // Canvas events (mouse)
     handleCanvasMouseDown,
     handleCanvasMouseMove,
     handleCanvasMouseUp,
+    // Canvas events (touch / tablet)
+    handleCanvasTouchStart,
+    handleCanvasTouchMove,
+    handleCanvasTouchEnd,
   }
 }

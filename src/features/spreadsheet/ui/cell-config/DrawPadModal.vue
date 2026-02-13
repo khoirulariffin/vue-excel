@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import { PenTool } from 'lucide-vue-next'
+import { touchToMouseCoords } from '@/shared/lib/useTouchGestures'
 
 interface Props {
   isOpen: boolean
@@ -68,6 +69,31 @@ const endDraw = () => {
   isDrawing.value = false
 }
 
+// --- Touch support (tablet) ---
+const startDrawTouch = (e: TouchEvent) => {
+  e.preventDefault()
+  if (!drawCtx.value || !drawCanvasRef.value) return
+  isDrawing.value = true
+  const { clientX, clientY } = touchToMouseCoords(e)
+  const rect = drawCanvasRef.value.getBoundingClientRect()
+  drawCtx.value.beginPath()
+  drawCtx.value.moveTo(clientX - rect.left, clientY - rect.top)
+}
+
+const moveDrawTouch = (e: TouchEvent) => {
+  e.preventDefault()
+  if (!isDrawing.value || !drawCtx.value || !drawCanvasRef.value) return
+  const { clientX, clientY } = touchToMouseCoords(e)
+  const rect = drawCanvasRef.value.getBoundingClientRect()
+  drawCtx.value.lineTo(clientX - rect.left, clientY - rect.top)
+  drawCtx.value.stroke()
+}
+
+const endDrawTouch = (e: TouchEvent) => {
+  e.preventDefault()
+  isDrawing.value = false
+}
+
 const clearDraw = () => {
   if (!drawCtx.value || !drawCanvasRef.value) return
   const canvas = drawCanvasRef.value
@@ -116,6 +142,9 @@ const saveDraw = () => {
             @mousemove="moveDraw"
             @mouseup="endDraw"
             @mouseleave="endDraw"
+            @touchstart="startDrawTouch"
+            @touchmove="moveDrawTouch"
+            @touchend="endDrawTouch"
           ></canvas>
         </div>
         <div class="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-2">

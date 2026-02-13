@@ -1,5 +1,6 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { useSpreadsheetStore } from '@/features/spreadsheet/model/spreadsheetStore'
+import { touchToMouseCoords } from '@/shared/lib/useTouchGestures'
 
 export const isImageValue = (val: string | number | null) =>
   typeof val === 'string' && val.startsWith('data:image')
@@ -114,6 +115,10 @@ export const useCellImage = (
     window.removeEventListener('mousemove', handleWidthResizeMove)
     window.removeEventListener('mousemove', handleHeightResizeMove)
     window.removeEventListener('mouseup', handleImgResizeEnd)
+    window.removeEventListener('touchmove', handleImgTouchMove)
+    window.removeEventListener('touchmove', handleWidthTouchMove)
+    window.removeEventListener('touchmove', handleHeightTouchMove)
+    window.removeEventListener('touchend', handleImgResizeEnd)
   }
 
   const handleWidthResizeStart = (e: MouseEvent) => {
@@ -156,11 +161,80 @@ export const useCellImage = (
     store.setRowHeight(rowIndex(), newH)
   }
 
+  // --- Touch resize handlers ---
+  const initResizeState = (clientX: number, clientY: number) => {
+    const sheet = store.activeSheet
+    if (!sheet) return false
+    const colW = sheet.columns[colIndex()]?.width ?? 80
+    const rowH = sheet.rowMetadata?.[rowIndex()]?.height ?? rowHeight()
+    store.pushUndo()
+    imgResizing.value = { startX: clientX, startY: clientY, startW: colW, startH: rowH }
+    return true
+  }
+
+  const handleImgTouchMove = (e: TouchEvent) => {
+    const { clientX, clientY } = touchToMouseCoords(e)
+    if (!imgResizing.value) return
+    const dx = clientX - imgResizing.value.startX
+    const dy = clientY - imgResizing.value.startY
+    const newW = Math.max(30, imgResizing.value.startW + dx)
+    const newH = Math.max(14, imgResizing.value.startH + dy)
+    store.setColumnWidth(colIndex(), newW)
+    store.setRowHeight(rowIndex(), newH)
+  }
+
+  const handleWidthTouchMove = (e: TouchEvent) => {
+    const { clientX } = touchToMouseCoords(e)
+    if (!imgResizing.value) return
+    const dx = clientX - imgResizing.value.startX
+    const newW = Math.max(30, imgResizing.value.startW + dx)
+    store.setColumnWidth(colIndex(), newW)
+  }
+
+  const handleHeightTouchMove = (e: TouchEvent) => {
+    const { clientY } = touchToMouseCoords(e)
+    if (!imgResizing.value) return
+    const dy = clientY - imgResizing.value.startY
+    const newH = Math.max(14, imgResizing.value.startH + dy)
+    store.setRowHeight(rowIndex(), newH)
+  }
+
+  const handleTouchImgResizeStart = (e: TouchEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const { clientX, clientY } = touchToMouseCoords(e)
+    if (!initResizeState(clientX, clientY)) return
+    window.addEventListener('touchmove', handleImgTouchMove, { passive: false })
+    window.addEventListener('touchend', handleImgResizeEnd)
+  }
+
+  const handleTouchWidthResizeStart = (e: TouchEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const { clientX, clientY } = touchToMouseCoords(e)
+    if (!initResizeState(clientX, clientY)) return
+    window.addEventListener('touchmove', handleWidthTouchMove, { passive: false })
+    window.addEventListener('touchend', handleImgResizeEnd)
+  }
+
+  const handleTouchHeightResizeStart = (e: TouchEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const { clientX, clientY } = touchToMouseCoords(e)
+    if (!initResizeState(clientX, clientY)) return
+    window.addEventListener('touchmove', handleHeightTouchMove, { passive: false })
+    window.addEventListener('touchend', handleImgResizeEnd)
+  }
+
   onUnmounted(() => {
     window.removeEventListener('mousemove', handleImgResizeMove)
     window.removeEventListener('mousemove', handleWidthResizeMove)
     window.removeEventListener('mousemove', handleHeightResizeMove)
     window.removeEventListener('mouseup', handleImgResizeEnd)
+    window.removeEventListener('touchmove', handleImgTouchMove)
+    window.removeEventListener('touchmove', handleWidthTouchMove)
+    window.removeEventListener('touchmove', handleHeightTouchMove)
+    window.removeEventListener('touchend', handleImgResizeEnd)
   })
 
   return {
@@ -177,5 +251,8 @@ export const useCellImage = (
     handleImgResizeStart,
     handleWidthResizeStart,
     handleHeightResizeStart,
+    handleTouchImgResizeStart,
+    handleTouchWidthResizeStart,
+    handleTouchHeightResizeStart,
   }
 }

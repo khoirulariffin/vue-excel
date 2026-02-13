@@ -3,6 +3,7 @@ import { computed, ref, toRef, onMounted, onUnmounted } from 'vue'
 import type { SheetData } from '@/shared/types'
 import { useMergeMap } from '@/features/spreadsheet/lib/useMergeMap'
 import { useSpreadsheetStore } from '@/features/spreadsheet/model/spreadsheetStore'
+import { touchToMouseCoords } from '@/shared/lib/useTouchGestures'
 import SpreadsheetCell from './SpreadsheetCell.vue'
 import ShapeLayer from './ShapeLayer.vue'
 
@@ -76,8 +77,14 @@ const handleMouseup = () => {
   isDragging.value = false
 }
 
-onMounted(() => window.addEventListener('mouseup', handleMouseup))
-onUnmounted(() => window.removeEventListener('mouseup', handleMouseup))
+onMounted(() => {
+  window.addEventListener('mouseup', handleMouseup)
+  window.addEventListener('touchend', handleMouseup)
+})
+onUnmounted(() => {
+  window.removeEventListener('mouseup', handleMouseup)
+  window.removeEventListener('touchend', handleMouseup)
+})
 
 // --- Column Resize ---
 const colResizing = ref<{ colIndex: number; startX: number; startWidth: number } | null>(null)
@@ -104,6 +111,30 @@ const handleColResizeEnd = () => {
   colResizing.value = null
   window.removeEventListener('mousemove', handleColResizeMove)
   window.removeEventListener('mouseup', handleColResizeEnd)
+  window.removeEventListener('touchmove', handleColTouchMove)
+  window.removeEventListener('touchend', handleColResizeEnd)
+}
+
+// Touch column resize
+const handleColTouchStart = (e: TouchEvent, colIndex: number) => {
+  e.preventDefault()
+  e.stopPropagation()
+  const col = props.data.columns[colIndex]
+  if (!col) return
+  store.pushUndo()
+  const { clientX } = touchToMouseCoords(e)
+  colResizing.value = { colIndex, startX: clientX, startWidth: col.width }
+  window.addEventListener('touchmove', handleColTouchMove, { passive: false })
+  window.addEventListener('touchend', handleColResizeEnd)
+}
+
+const handleColTouchMove = (e: TouchEvent) => {
+  if (!colResizing.value) return
+  e.preventDefault()
+  const { clientX } = touchToMouseCoords(e)
+  const delta = (clientX - colResizing.value.startX) / props.zoom
+  const newWidth = colResizing.value.startWidth + delta
+  store.setColumnWidth(colResizing.value.colIndex, newWidth)
 }
 
 // --- Row Resize ---
@@ -130,6 +161,29 @@ const handleRowResizeEnd = () => {
   rowResizing.value = null
   window.removeEventListener('mousemove', handleRowResizeMove)
   window.removeEventListener('mouseup', handleRowResizeEnd)
+  window.removeEventListener('touchmove', handleRowTouchMove)
+  window.removeEventListener('touchend', handleRowResizeEnd)
+}
+
+// Touch row resize
+const handleRowTouchStart = (e: TouchEvent, rowIndex: number) => {
+  e.preventDefault()
+  e.stopPropagation()
+  const height = getRowHeight(rowIndex)
+  store.pushUndo()
+  const { clientY } = touchToMouseCoords(e)
+  rowResizing.value = { rowIndex, startY: clientY, startHeight: height }
+  window.addEventListener('touchmove', handleRowTouchMove, { passive: false })
+  window.addEventListener('touchend', handleRowResizeEnd)
+}
+
+const handleRowTouchMove = (e: TouchEvent) => {
+  if (!rowResizing.value) return
+  e.preventDefault()
+  const { clientY } = touchToMouseCoords(e)
+  const delta = (clientY - rowResizing.value.startY) / props.zoom
+  const newHeight = rowResizing.value.startHeight + delta
+  store.setRowHeight(rowResizing.value.rowIndex, newHeight)
 }
 </script>
 
@@ -192,6 +246,7 @@ const handleRowResizeEnd = () => {
                   <div
                     class="absolute top-0 right-0 w-[5px] h-full cursor-col-resize z-30 hover:bg-primary-400/50"
                     @mousedown="handleColResizeStart($event, colIdx)"
+                    @touchstart="handleColTouchStart($event, colIdx)"
                   />
                 </th>
               </tr>
@@ -215,6 +270,7 @@ const handleRowResizeEnd = () => {
                     class="absolute bottom-0 left-0 w-full h-[6px] cursor-row-resize z-40 hover:bg-primary-500 active:bg-primary-600 transition-colors"
                     style="margin-bottom: -3px"
                     @mousedown="handleRowResizeStart($event, rowIndex)"
+                    @touchstart="handleRowTouchStart($event, rowIndex)"
                   />
                 </td>
 

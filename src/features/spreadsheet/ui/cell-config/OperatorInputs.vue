@@ -22,6 +22,9 @@ const emit = defineEmits<{
   resizeStart: [e: MouseEvent]
   widthResizeStart: [e: MouseEvent]
   heightResizeStart: [e: MouseEvent]
+  touchResizeStart: [e: TouchEvent]
+  touchWidthResizeStart: [e: TouchEvent]
+  touchHeightResizeStart: [e: TouchEvent]
 }>()
 </script>
 
@@ -127,6 +130,9 @@ const emit = defineEmits<{
       @resize-start="emit('resizeStart', $event)"
       @width-resize-start="emit('widthResizeStart', $event)"
       @height-resize-start="emit('heightResizeStart', $event)"
+      @touch-resize-start="emit('touchResizeStart', $event)"
+      @touch-width-resize-start="emit('touchWidthResizeStart', $event)"
+      @touch-height-resize-start="emit('touchHeightResizeStart', $event)"
     />
     <div v-else class="flex flex-col items-center gap-0.5 text-gray-400 dark:text-gray-500">
       <ImagePlus :size="18" />
@@ -185,6 +191,9 @@ const emit = defineEmits<{
       @resize-start="emit('resizeStart', $event)"
       @width-resize-start="emit('widthResizeStart', $event)"
       @height-resize-start="emit('heightResizeStart', $event)"
+      @touch-resize-start="emit('touchResizeStart', $event)"
+      @touch-width-resize-start="emit('touchWidthResizeStart', $event)"
+      @touch-height-resize-start="emit('touchHeightResizeStart', $event)"
     />
     <div v-else class="flex flex-col items-center gap-0.5 text-gray-400 dark:text-gray-500">
       <PenTool :size="18" />
